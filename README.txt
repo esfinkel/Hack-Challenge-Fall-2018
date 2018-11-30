@@ -1,3 +1,5 @@
+# Hack Challenge Fall 2018
+
 App Name tbd (was FullPlan)
 Social medium for CS students to meet one another.
 iOS stored at https://github.com/CameronHamidi/Hack-Challenge
@@ -10,12 +12,6 @@ For CS students to network and find partners for personal and course projects. N
 
 Assignment requirements fulfilled:
 Project uses SQLAlchemy to model user data, posts, authentication information, etc. Uses GET, POST, AND DELETE requests for all those. Has been deployed to Google Cloud.
-
-
-
-
-
-
 
 
 
