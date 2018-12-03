@@ -30,7 +30,8 @@ class User(db.Model):
     name = db.Column(db.String, nullable=False)
     active = db.Column(db.Boolean, nullable=False)
     profile_photo = db.Column(db.String, nullable=True)
-    major_minor = db.Column(db.String, nullable=False)
+    major = db.Column(db.String, default="", nullable=False)
+    minor = db.Column(db.String, default="", nullable=False)
     contact_info = db.Column(db.String, nullable=False)
     skills = db.Column(db.String, nullable=False)
     role = db.Column(db.String, nullable=False)
@@ -51,7 +52,8 @@ class User(db.Model):
         self.name = kwargs.get('name')
         self.active = True
         self.profile_photo = kwargs.get('profile_photo')
-        self.major_minor = kwargs.get('major_minor')
+        self.major = kwargs.get('major')
+        self.minor = kwargs.get('minor')
         self.contact_info = kwargs.get('contact_info')
         self.skills = kwargs.get('skills')
         self.role = kwargs.get('role')
@@ -67,7 +69,8 @@ class User(db.Model):
             'name': self.name,
             'active': self.active,
             'profile_photo': self.profile_photo,
-            'major_minor': self.major_minor,
+            'major': self.major,
+            'minor': self.minor,
             'contact_info': self.contact_info,
             'skills': self.skills,
             'role': self.role,
@@ -131,6 +134,7 @@ class Post(db.Model):
     
     def serialize(self):
         #if self.kind==
+        nm = User.query.filter_by(uid=self.uid).first().name
         ubiquitious = {
             'id': self.id,
             'uid': self.uid,
@@ -141,6 +145,7 @@ class Post(db.Model):
             'active': self.active,
             'creation_time': self.creation_time,
             'kind': self.kind,
+            'name': nm
         }
         if self.kind == 0:
             ubiquitious['course'] = self.course
@@ -165,12 +170,14 @@ class Comment(db.Model):
         self.creation_time = kwargs.get('creation_time')
 
     def serialize(self):
+        nm = User.query.filter_by(uid=self.uid).first().name
         return {
             'id': self.id,
             'text': self.text,
             'post_id': self.post_id,
             'uid': self.uid,
-            'creation_time': self.creation_time
+            'creation_time': self.creation_time,
+            'name': nm
         }
 
 class Course(db.Model):

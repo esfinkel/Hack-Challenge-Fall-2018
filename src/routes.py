@@ -8,7 +8,7 @@ import time, datetime
 import random
 
 app = Flask(__name__)
-db_filename = "medium1.db"
+db_filename = "testfile1.db"
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///%s' % db_filename
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -67,18 +67,25 @@ def invalid_token():
   return json.dumps({'success': False, 'error': 'Invalid token - not connected with any user.'}), 401
 
 def token_to_uid(token):
-  if type(token) == dict:
-    token = token['token']
+  if type(token) not in [str, int]:
+    token = token.get('token',0)
   if type(token) == str:
     token = int(token)
   session = Authentication.query.filter_by(token=token).first()
-  if not session:
+  if session is None:
     return None
   return session.uid
 
+def extract(req):
+  try:
+    re = json.loads(req.data)
+  except:
+    re = req.args
+  return re
+
 @app.route('/api/login/create/', methods=['POST'])
 def create_acc():
-  acc_info = json.loads(request.data)
+  acc_info = extract(request)
   if not (acc_info.get('email','') and acc_info.get('password','')):
     return missing()
   current = Authentication.query.filter_by(email=acc_info.get('email')).first()
@@ -98,10 +105,15 @@ def create_acc():
   db.session.commit()
   return json.dumps({'success': True, 'data': auth.deliver()}), 201
 
+@app.route('/api/debug/')
+def debug():
+  re = request.args
+  a = re.get('a','')
+  return json.dumps({'success': True, 'data': a}), 200
 
 @app.route('/api/users/', methods=['POST'])
 def add_user():
-  user_info = json.loads(request.data)
+  user_info = extract(request)
   #ask iOS to set it so user can't submit form without data:
   if not all(user_info.get(i,'') for i in ['name','contact_info','token']):
     return missing()
@@ -111,7 +123,8 @@ def add_user():
   user = User(
     name = user_info.get('name'),
     profile_photo = user_info.get('profile_photo', None),
-    major_minor = user_info.get('major_minor', ''),
+    major = user_info.get('major', ''),
+    minor = user_info.get('minor', ''),
     contact_info = user_info.get('contact_info'),
     skills = clean_tags(user_info.get('skills', '')),
     role = clean_tags(user_info.get('role', '')),
@@ -130,7 +143,7 @@ def add_user():
 
 @app.route('/api/login/', methods=['POST'])
 def login():
-  login_info = json.loads(request.data)
+  login_info = extract(request)
   if not all(login_info.get(i,'') for i in ['email','password']):
     return missing()
   user = Authentication.query.filter_by(
@@ -150,10 +163,10 @@ def login():
 
 @app.route('/api/login/', methods=['GET'])
 def is_logged_in():
-  uid = token_to_uid(json.loads(request.data))
-  logged_in = bool(uid)
-  if uid==0 and type(uid)==int:
-    logged_in = True
+  uid = token_to_uid(extract(request))
+  logged_in = (uid is not None)
+  """  if uid==0 and type(uid)==int:
+      logged_in = True"""
   return json.dumps({'success': True, 'data': logged_in}), 200
 
 @app.route('/api/users/profile/<int:uid>/')
@@ -179,12 +192,13 @@ def get_all_user_info():
 @app.route('/api/users/search/')
 def search_users():
   try:
-    search = json.loads(request.data)
+    search = extract(request)
   except:
     search = {}
   info = {
     'name': search.get('name', ''), 
-    'major_minor': search.get('major_minor', ''),
+    'major': search.get('major', ''),
+    'minor': search.get('minor', ''),
     'class_year': search.get('class_year', ''),
     'courses_taken': clean_courses(search.get('courses_taken', '')),
     'skills': clean_tags(search.get('skills', '')),
@@ -197,9 +211,9 @@ def search_users():
   working_userlist.filter_by(active=True)
   if info['name']:
     working_userlist = working_userlist.filter(func.lower(User.name) == info['name'])
-  if info['major_minor']:
+  if info['major']:
     working_userlist = working_userlist.filter(or_(
-      User.major_minor.contains(mm) for mm in info['major_minor'].split(', ')
+      User.major.contains(mm) for mm in info['major'].split(', ')
     ))
   if info['class_year']:
     working_userlist = working_userlist.filter(func.lower(User.class_year) == info['class_year'])  
@@ -221,7 +235,7 @@ def search_users():
 
 @app.route('/api/posts/search/')
 def search_posts():
-  search = json.loads(request.data)
+  search = extract(request)
   if 'kind' not in search:
     return missing()
   info = {
@@ -263,7 +277,7 @@ def search_posts():
 
 @app.route('/api/users/self/')
 def get_own_profile():
-  search = json.loads(request.data)
+  search = extract(request)
   uid = token_to_uid(search)
   if uid is None:
     return invalid_token()
@@ -272,7 +286,7 @@ def get_own_profile():
 
 @app.route('/api/posts/self/')
 def own_posts():
-  search = json.loads(request.data)
+  search = extract(request)
   uid = token_to_uid(search.get('token'))
   if uid is None:
     return invalid_token()
@@ -281,7 +295,7 @@ def own_posts():
 
 @app.route('/api/posts/', methods=['POST'])
 def make_post():
-  post_body = json.loads(request.data)
+  post_body = extract(request)
   if not all(post_body.get(i,'') for i in ['text', 'token', 'title']):
     return missing()
   if 'kind' not in post_body:
@@ -340,7 +354,7 @@ def add_post_comment(post_id):
   post = Post.query.filter_by(id=post_id, active=True).first()
   if post is None:
     return nopost()
-  comment_body = json.loads(request.data)
+  comment_body = extract(request)
   if 'text' not in comment_body or 'token' not in comment_body:
     return missing()
   uid = token_to_uid(comment_body)
@@ -366,12 +380,12 @@ def get_post_comments(post_id):
 @app.route('/api/posts/comments/<int:comment_id>/', methods=['POST'])
 def modify_comment(comment_id):
   comment = Comment.query.filter_by(id=comment_id).first()
-  sender = token_to_uid(json.loads(request.data))
+  sender = token_to_uid(extract(request))
   if sender is None:
     return invalid_token()
   if comment is None:
     return nocomment()
-  info = json.loads(request.data)
+  info = extract(request)
   new_text = info.get('text', None)
   if not sender==comment.uid:
     return wrong_token()
@@ -383,7 +397,7 @@ def modify_comment(comment_id):
 
 @app.route('/api/users/profile/modify/', methods=['POST'])
 def modify_user():
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if uid is None:
     return invalid_token()
@@ -400,7 +414,8 @@ def modify_user():
   info = info1
 
   user.name = info.get('name', user.name)
-  user.major_minor = info.get('major_minor', user.major_minor)
+  user.major = info.get('major', user.major)
+  user.minor = info.get('minor', user.minor)
   user.contact_info = info.get('contact_info', user.contact_info)
   user.skills = clean_tags(info.get('skills', user.skills))
   user.role = clean_tags(info.get('role', user.role))
@@ -414,7 +429,7 @@ def modify_user():
 
 @app.route('/api/posts/<int:id>/modify/', methods=['POST'])
 def modify_post(id):
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if uid is None:
     return invalid_token()
@@ -457,7 +472,7 @@ def modify_post(id):
 
 @app.route('/api/users/profile/toggle/', methods=['POST'])
 def toggle_user_activity():
-  uid = token_to_uid(json.loads(request.data))
+  uid = token_to_uid(extract(request))
   if uid is None:
     return invalid_token()
   user = User.query.filter_by(uid=uid).first()
@@ -469,13 +484,13 @@ def toggle_user_activity():
 
 @app.route('/api/users/profile/photo/', methods=['POST'])
 def edit_user_photo():
-  uid = token_to_uid(json.loads(request.data))
+  uid = token_to_uid(extract(request))
   if uid is None:
     return invalid_token()
   user = User.query.filter_by(uid=uid).first()
   if user is None:
     return nouser()
-  info = json.loads(request.data)
+  info = extract(request)
   user.profile_photo = info.get('profile_photo', user.profile_photo)
   user.active = True
   db.session.commit()
@@ -487,7 +502,7 @@ def confirm_post_ownership(id):
   if post is None:
     return nopost()
   post_owner = post.uid
-  sender = token_to_uid(json.loads(request.data))
+  sender = token_to_uid(extract(request))
   if sender is None:
     return invalid_token()
   match = (post_owner==sender)
@@ -499,7 +514,7 @@ def confirm_comment_ownership(id):
   if comment is None:
     return nocomment()
   comment_owner = comment.uid
-  sender = token_to_uid(json.loads(request.data))
+  sender = token_to_uid(extract(request))
   if sender is None:
     return invalid_token()
   match = (comment_owner==sender)
@@ -508,7 +523,7 @@ def confirm_comment_ownership(id):
 @app.route('/api/posts/<int:id>/toggle/', methods=['POST'])
 def toggle_post_activity(id):
   post = Post.query.filter_by(id=id).first()
-  uid = token_to_uid(json.loads(request.data))
+  uid = token_to_uid(extract(request))
   if uid is None:
     return invalid_token()
   if post is None:
@@ -526,7 +541,7 @@ def delete_comment(comment_id):
     return nocomment()
   if comment.uid is None:
     return # None
-  if token_to_uid(json.loads(request.data))==comment.uid:
+  if token_to_uid(extract(request))==comment.uid:
     db.session.delete(comment)
     db.session.commit()
   else:
@@ -536,7 +551,7 @@ def delete_comment(comment_id):
 @app.route('/api/posts/<int:post_id>/interest/', methods=['POST'])
 def toggle_post_interest(post_id):
   post = Post.query.filter_by(id=post_id, active=True).first()
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   user = User.query.filter_by(uid=uid).first()
   if not user or not post:
@@ -558,7 +573,7 @@ def toggle_post_interest(post_id):
   
 @app.route('/api/users/interest/')
 def find_interested_posts():
-  uid = token_to_uid(json.loads(request.data))
+  uid = token_to_uid(extract(request))
   if uid is None:
     return invalid_token()
   user = User.query.filter_by(uid=uid).first()
@@ -569,7 +584,7 @@ def find_interested_posts():
 
 @app.route('/api/users/interest/number/')
 def find_number_interested_posts():
-  uid = token_to_uid(json.loads(request.data))
+  uid = token_to_uid(extract(request))
   if uid is None:
     return invalid_token()
   user = User.query.filter_by(uid=uid).first()
@@ -580,7 +595,7 @@ def find_number_interested_posts():
 
 @app.route('/api/staff_request/', methods=['POST'])
 def make_request():
-  request_info = json.loads(request.data)
+  request_info = extract(request)
   if not all(request_info.get(i,'') for i in ['token', 'email', 'text']):
     return missing()
   uid = token_to_uid(request_info)
@@ -598,7 +613,7 @@ def make_request():
 
 @app.route('/api/courses/', methods=['POST'])
 def add_courses():
-  info = json.loads(request.data)
+  info = extract(request)
   courses = info.get('courses')
   courses = [course.upper().replace(' ','') for course in courses.split(',')]
   for course in courses:
@@ -614,7 +629,7 @@ def get_all_courses():
 
 @app.route('/api/courses/', methods=['GET'])
 def get_courses():
-  start = json.loads(request.data).get('start','')
+  start = extract(request).get('start','')
   matching = Course.query.filter(Course.name.contains(start)).all()
   return json.dumps({'success': True, 'data': [c.name for c in matching]}), 200
 
@@ -622,14 +637,17 @@ def get_courses():
 def convert_time():
   # This implementation does not address time zones, but as the app is intended for use on Cornell
   # campus, I felt this was an acceptable flaw
-  fl = json.loads(request.data).get('time',time.time())
+  fl = extract(request).get('time',None)
+  if fl is None:
+    return missing()
+  fl = float(fl)
   t = datetime.datetime.fromtimestamp(fl)
   timeinfo = {'year': t.year, 'month': t.month, 'day': t.day, 'hour': t.hour, 'minute': t.minute}
   return json.dumps({'success': True, 'data': timeinfo}), 200
 
 @app.route('/api/posts/<int:post_id>/photos/', methods=['POST'])
 def add_post_photo(post_id):
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if uid is None:
     return invalid_token()
@@ -657,7 +675,7 @@ def add_post_photo(post_id):
 
 @app.route('/api/posts/<int:post_id>/photos/', methods=['DELETE'])
 def remove_post_photo(post_id):
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if uid is None:
     return invalid_token()
@@ -668,7 +686,7 @@ def remove_post_photo(post_id):
     return nopost()
   if not post.uid == uid:
     return wrong_token()
-  photo_id = info.get('photo_id')
+  photo_id = int(info.get('photo_id'))
   photo = Photo.query.filter_by(id=photo_id).first()
   if not photo:
     return json.dumps({'success': False, 'error': 'Photo not found!'}), 404
@@ -688,7 +706,7 @@ def get_post_photos(post_id):
 
 @app.route('/api/users/profile/past_projects/', methods=['POST'])
 def add_past_project():
-  info = json.loads(request.data)
+  info = extract(request)
   if not all(info.get(i,'') for i in ['description', 'token', 'name']):
     return missing()
   uid = token_to_uid(info)
@@ -710,7 +728,7 @@ def add_past_project():
 
 @app.route('/api/users/profile/past_projects/modify/', methods=['POST'])
 def modify_past_project():
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if not uid:
     return invalid_token()
@@ -718,7 +736,7 @@ def modify_past_project():
   if 'id' not in info:
     return missing()
   if info.get('id',None):
-    proj = proj.filter_by(id=info.get('id'))
+    proj = proj.filter_by(id=int(info.get('id')))
   proj = proj.first()
   if not proj:
     return nopost()
@@ -726,7 +744,6 @@ def modify_past_project():
     return invalid_token()
   if info.get('name',''):
     proj.name=info.get('name')
-    print('thenewnameis',info.get('name'))
   if 'skills' in info:
     proj.skills=clean_tags(info.get('skills',''))
   if info.get('description',''):
@@ -738,13 +755,13 @@ def modify_past_project():
 
 @app.route('/api/users/profile/past_projects/', methods=['DELETE'])
 def remove_past_project():
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if not uid:
     return invalid_token()
   proj = PastProject.query
   if info.get('id',None):
-    proj = proj.filter_by(id=info.get('id'))
+    proj = proj.filter_by(id=int(info.get('id')))
   proj = proj.first()
   if not proj:
     return nopost()
@@ -766,7 +783,7 @@ def get_past_projects(uid):
 
 @app.route('/api/users/profile/past_projects/')
 def get_own_past_projects():
-  info = json.loads(request.data)
+  info = extract(request)
   uid = token_to_uid(info)
   if not uid:
     return invalid_token()
@@ -775,4 +792,4 @@ def get_own_past_projects():
   return json.dumps({'success': True, 'data': projs}), 200
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+  app.run(host='0.0.0.0', port=5000, debug=True)
