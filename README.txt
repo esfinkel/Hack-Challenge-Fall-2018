@@ -1,6 +1,6 @@
 # Hack Challenge Fall 2018
 
-App Name tbd (was FullPlan)
+CollabIT
 Social medium for CS students to meet one another.
 iOS stored at https://github.com/CameronHamidi/Hack-Challenge
 
