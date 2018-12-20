@@ -8,7 +8,7 @@ Specifications are located at https://docs.google.com/document/d/1EL7b18_NXVwWJe
 
 For CS students to network and find partners for personal and course projects. Not exclusively for CS students/courses! Users can set up a profile, make posts and comments, store a list of saved posts, and search for other users and posts.
 
-[PUT SCREENSHOTS HERE WHEN WE HAVE SOME]
+Screenshots located in iOS README.
 
 Assignment requirements fulfilled:
 Project uses SQLAlchemy to model user data, posts, authentication information, etc. Uses GET, POST, AND DELETE requests for all those. Has been deployed to Google Cloud.
